@@ -341,6 +341,10 @@ struct astcenc_context
 
 	/** @brief The parallel manager for decompression. */
 	ParallelManager manage_decompress;
+
+	uint8_t* partitionCount = nullptr;
+	uint16_t* partitionIndex = nullptr;
+	float* out_error = nullptr;
 };
 
 #endif

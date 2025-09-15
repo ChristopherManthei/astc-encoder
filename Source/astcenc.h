@@ -871,4 +871,6 @@ ASTCENC_PUBLIC astcenc_error astcenc_get_block_info(
 ASTCENC_PUBLIC const char* astcenc_get_error_string(
 	astcenc_error status);
 
+ASTCENC_PUBLIC void astcenc_hack_test(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, const uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize);
+
 #endif

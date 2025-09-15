@@ -1164,8 +1164,9 @@ void compress_block(
 	const astcenc_contexti& ctx,
 	const image_block& blk,
 	uint8_t pcb[16],
-	compression_working_buffers& tmpbuf)
+	compression_working_buffers& tmpbuf, uint8_t* partitionCount, uint16_t* partitionIndex, float* out_error)
 {
+
 	astcenc_profile decode_mode = ctx.config.profile;
 	symbolic_compressed_block scb;
 	const block_size_descriptor& bsd = *ctx.bsd;
@@ -1214,7 +1215,7 @@ void compress_block(
 #endif
 
 	// Detected a constant-color block
-	if (all(blk.data_min == blk.data_max))
+	if (partitionCount == nullptr && all(blk.data_min == blk.data_max))
 	{
 		TRACE_NODE(node1, "pass");
 		trace_add_data("partition_count", 0);
@@ -1291,6 +1292,29 @@ void compress_block(
 	}
 
 	int quant_limit = QUANT_32;
+
+	if (partitionCount != nullptr && partitionIndex != nullptr && out_error != nullptr)
+	{
+			uint16_t realPartitionIndex = bsd.get_partition_table(*partitionCount)[*partitionIndex].partition_index;
+			*out_error = compress_symbolic_block_for_partition_1plane(
+							ctx.config, bsd, blk, false,
+							error_threshold * errorval_overshoot,
+							*partitionCount, realPartitionIndex,
+							scb, tmpbuf, quant_limit);
+
+			if (scb.block_type == SYM_BTYPE_ERROR)
+			{
+					scb.block_type = SYM_BTYPE_CONST_U16;
+					vfloat4 color_f32 = clamp(0.0f, 1.0f, blk.origin_texel) * 65535.0f;
+					vint4 color_u16 = float_to_int_rtn(color_f32);
+					store(color_u16, scb.constant_color);
+			}
+
+			// Compress to a physical block
+			symbolic_to_physical(bsd, scb, pcb);
+			return;
+	}
+
 	for (int i = start_trial; i < 2; i++)
 	{
 		TRACE_NODE(node1, "pass");

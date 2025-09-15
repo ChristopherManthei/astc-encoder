@@ -2051,7 +2051,7 @@ void compress_block(
 	const astcenc_contexti& ctx,
 	const image_block& blk,
 	uint8_t pcb[16],
-	compression_working_buffers& tmpbuf);
+	compression_working_buffers& tmpbuf, uint8_t* partitionCount = nullptr, uint16_t* partitionIndex = nullptr, float* out_error = nullptr);
 
 /**
  * @brief Decompress a symbolic block in to an image block.

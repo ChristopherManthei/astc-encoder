@@ -2173,6 +2173,18 @@ int astcenc_main(
 		work.data_len = buffer_size;
 		work.error = ASTCENC_SUCCESS;
 
+		const size_t blockCount = blocks_x * blocks_y;
+		float* error = new float[blockCount];
+		uint16_t* partitionSelection = new uint16_t[blockCount];
+		for (size_t i = 0; i < blockCount; i++)
+		{
+			partitionSelection[i] = 0;
+		}
+
+		astcenc_hack_test(image_uncomp_in->dim_x, image_uncomp_in->dim_y,
+			reinterpret_cast<uint8_t*>(image_uncomp_in->data[0]), image_uncomp_in->dim_x* image_uncomp_in->dim_y * 4,
+			partitionSelection, blockCount, error, blockCount);
+
 		// Only launch worker threads for multi-threaded use - it makes basic
 		// single-threaded profiling and debugging a little less convoluted
 		double start_compression_time = get_time();
