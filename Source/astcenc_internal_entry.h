@@ -342,6 +342,7 @@ struct astcenc_context
 	/** @brief The parallel manager for decompression. */
 	ParallelManager manage_decompress;
 
+	HackMode mode = HackMode::UseGivenPartition;
 	uint8_t* partitionCount = nullptr;
 	uint16_t* partitionIndex = nullptr;
 	float* out_error = nullptr;

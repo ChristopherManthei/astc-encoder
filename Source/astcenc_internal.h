@@ -1075,7 +1075,7 @@ struct symbolic_compressed_block
 	uint8_t block_type;
 
 	/** @brief The number of partitions; valid for @c NONCONST blocks. */
-	uint8_t partition_count;
+	uint8_t partition_count = 0;
 
 	/** @brief Non-zero if the color formats matched; valid for @c NONCONST blocks. */
 	uint8_t color_formats_matched;
@@ -1087,7 +1087,7 @@ struct symbolic_compressed_block
 	uint16_t block_mode;
 
 	/** @brief The partition index; valid for @c NONCONST blocks if 2 or more partitions. */
-	uint16_t partition_index;
+	uint16_t partition_index = 0;
 
 	/** @brief The endpoint color formats for each partition; valid for @c NONCONST blocks. */
 	uint8_t color_formats[BLOCK_MAX_PARTITIONS];
@@ -2051,7 +2051,7 @@ void compress_block(
 	const astcenc_contexti& ctx,
 	const image_block& blk,
 	uint8_t pcb[16],
-	compression_working_buffers& tmpbuf, uint8_t* partitionCount = nullptr, uint16_t* partitionIndex = nullptr, float* out_error = nullptr);
+	compression_working_buffers& tmpbuf, uint8_t* partitionCount = nullptr, uint16_t* partitionIndex = nullptr, float* out_error = nullptr, HackMode mode = HackMode::UseGivenPartition);
 
 /**
  * @brief Decompress a symbolic block in to an image block.

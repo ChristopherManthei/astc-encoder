@@ -940,7 +940,7 @@ static void compress_image(
 				uint16_t* partitionIndex = ctxo.partitionIndex + offset2;
 				float* out_error = ctxo.out_error + offset2;
 
-				compress_block(ctx, blk, bp, temp_buffers, partitionCount, partitionIndex, out_error);
+				compress_block(ctx, blk, bp, temp_buffers, partitionCount, partitionIndex, out_error, ctxo.mode);
 			}
 			else
 			{
@@ -1433,119 +1433,269 @@ const char* astcenc_get_error_string(
 
 void astcenc_hack_test(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, const uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize)
 {
-	#ifdef NDEBUG
-	static_cast<void>(partitionSelectionSize);
-	static_cast<void>(errorSize);
-	static_cast<void>(pixelDataSize);
-	#endif
-	// Configure the compressor run
-	astcenc_config my_config;
-	astcenc_config_init(astcenc_profile::ASTCENC_PRF_LDR_SRGB, 4, 4, 0, ASTCENC_PRE_THOROUGH, 0, &my_config);
+	astcenc_hack_test_and_output(width, height, pixelData, pixelDataSize, partitionSelection, partitionSelectionSize, out_error, errorSize, nullptr);
+}
 
-	uint32_t thread_count = 1;
-#if defined(_WIN32)
-	// Use Windows API to get the number of active logical processors
-	unsigned int cnt = static_cast<unsigned int>(GetActiveProcessorCount(ALL_PROCESSOR_GROUPS));
-	thread_count = (cnt == 0) ? 1u : cnt;
-#else
-	// Fallback to std::thread if not on Windows
-	unsigned int cnt = std::thread::hardware_concurrency();
-	thread_count = (cnt == 0) ? 1u : cnt;
+void astcenc_hack_test_and_output(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, const uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize, uint8_t* out_decompressedPixelData)
+{
+#ifdef NDEBUG
+  static_cast<void>(partitionSelectionSize);
+  static_cast<void>(errorSize);
+  static_cast<void>(pixelDataSize);
+	static_cast<void>(out_decompressedPixelData);
 #endif
-	// Allocate working state given config and thread_count
-	astcenc_context* my_context{};
-	astcenc_context_alloc(&my_config, thread_count, &my_context);
+  // Configure the compressor run
+  astcenc_config my_config;
+  astcenc_config_init(astcenc_profile::ASTCENC_PRF_LDR_SRGB, 4, 4, 0, ASTCENC_PRE_THOROUGH, 0, &my_config);
 
-	// For each image
-	{
-		astcenc_image image;
-		image.data_type = ASTCENC_TYPE_U8;
-		image.dim_x = width;
-		image.dim_y = height;
-		image.dim_z = 1;
-		image.data = reinterpret_cast<void**>(const_cast<uint8_t**>(&pixelData)); // Needs to be 4 channel rgba
-		
-		// Make sure alpha is unused
-		astcenc_swizzle swizzle;
-		swizzle.r = astcenc_swz::ASTCENC_SWZ_R;
-		swizzle.g = astcenc_swz::ASTCENC_SWZ_G;
-		swizzle.b = astcenc_swz::ASTCENC_SWZ_B;
-		swizzle.a = astcenc_swz::ASTCENC_SWZ_1;
+  uint32_t thread_count = 1;
+#if defined(_WIN32)
+  // Use Windows API to get the number of active logical processors
+  unsigned int cnt = static_cast<unsigned int>(GetActiveProcessorCount(ALL_PROCESSOR_GROUPS));
+  thread_count = (cnt == 0) ? 1u : cnt;
+#else
+  // Fallback to std::thread if not on Windows
+  unsigned int cnt = std::thread::hardware_concurrency();
+  thread_count = (cnt == 0) ? 1u : cnt;
+#endif
+  // Allocate working state given config and thread_count
+  astcenc_context* my_context{};
+  astcenc_context_alloc(&my_config, thread_count, &my_context);
 
-		// Separate our partition selection into partitionCount and partitionIndex
-		const size_t blocks = (width / 4) * (height / 4);
-		assert(blocks <= errorSize);
-		assert(blocks <= partitionSelectionSize);
-		assert(width * height * 4 <= pixelDataSize);
+  // For each image
+  {
+    astcenc_image image;
+    image.data_type = ASTCENC_TYPE_U8;
+    image.dim_x = width;
+    image.dim_y = height;
+    image.dim_z = 1;
+    image.data = reinterpret_cast<void**>(const_cast<uint8_t**>(&pixelData)); // Needs to be 4 channel rgba
 
-		my_context->partitionCount = new uint8_t[blocks];
-		my_context->partitionIndex = new uint16_t[blocks];
-		my_context->out_error = out_error;
+    // Make sure alpha is unused
+    astcenc_swizzle swizzle;
+    swizzle.r = astcenc_swz::ASTCENC_SWZ_R;
+    swizzle.g = astcenc_swz::ASTCENC_SWZ_G;
+    swizzle.b = astcenc_swz::ASTCENC_SWZ_B;
+    swizzle.a = astcenc_swz::ASTCENC_SWZ_1;
 
-		const uint16_t part1Start = 0;
-		const uint16_t part2Start = part1Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[0];
-		const uint16_t part3Start = part2Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[1];
-		const uint16_t part4Start = part3Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[2];
-		const uint16_t totalPartitions = part4Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[3];
+    // Separate our partition selection into partitionCount and partitionIndex
+    const size_t blocks = (width / 4) * (height / 4);
+    assert(blocks <= errorSize);
+    assert(blocks <= partitionSelectionSize);
+    assert(width * height * 4 <= pixelDataSize);
 
-		for (size_t i = 0; i < blocks; i++)
-		{
-			uint16_t partitionSelectionIndex = partitionSelection[i];
-			uint8_t& partitionCount = my_context->partitionCount[i];
-			uint16_t& partitionIndex = my_context->partitionIndex[i];
-			if (partitionSelectionIndex >= totalPartitions)
+		my_context->mode = HackMode::UseGivenPartition;
+    my_context->partitionCount = new uint8_t[blocks];
+    my_context->partitionIndex = new uint16_t[blocks];
+    my_context->out_error = out_error;
+
+    const uint16_t part1Start = 0;
+    const uint16_t part2Start = part1Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[0];
+    const uint16_t part3Start = part2Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[1];
+    const uint16_t part4Start = part3Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[2];
+    const uint16_t totalPartitions = part4Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[3];
+
+    for (size_t i = 0; i < blocks; i++)
+    {
+      uint16_t partitionSelectionIndex = partitionSelection[i];
+      uint8_t& partitionCount = my_context->partitionCount[i];
+      uint16_t& partitionIndex = my_context->partitionIndex[i];
+      if (partitionSelectionIndex >= totalPartitions)
+      {
+        assert(false);
+      }
+      else if (partitionSelectionIndex >= part4Start)
+      {
+        partitionCount = 4;
+        partitionIndex = partitionSelectionIndex - part4Start;
+      }
+      else if (partitionSelectionIndex >= part3Start)
+      {
+        partitionCount = 3;
+        partitionIndex = partitionSelectionIndex - part3Start;
+      }
+      else if (partitionSelectionIndex >= part2Start)
+      {
+        partitionCount = 2;
+        partitionIndex = partitionSelectionIndex - part2Start;
+      }
+      else
+      {
+        partitionCount = 1;
+        partitionIndex = partitionSelectionIndex - part1Start;
+      }
+    }
+
+    // Temp output buffer
+    const size_t buffer_size = blocks * 16;
+    uint8_t* buffer = new uint8_t[buffer_size];
+
+    // For each thread in the thread pool
+    {
+      std::vector<std::thread> threads;
+      threads.reserve(thread_count);
+      for (uint32_t i = 0; i < thread_count; ++i)
+      {
+        threads.emplace_back(astcenc_compress_image, my_context, &image, &swizzle, buffer, buffer_size, i);
+      }
+      for (auto& t : threads)
+      {
+        if (t.joinable()) t.join();
+      }
+    }
+    astcenc_compress_reset(my_context);
+
+    if (out_decompressedPixelData != nullptr)
+    {
+			image.data = reinterpret_cast<void**>(const_cast<uint8_t**>(&out_decompressedPixelData)); // Needs to be 4 channel rgba
+
+      std::vector<std::thread> threads;
+      threads.reserve(thread_count);
+      for (uint32_t i = 0; i < thread_count; ++i)
+      {
+        threads.emplace_back(astcenc_decompress_image, my_context, buffer, buffer_size, &image, &swizzle, i);
+      }
+      for (auto& t : threads)
+      {
+        if (t.joinable()) t.join();
+      }
+      astcenc_decompress_reset(my_context);
+    }
+
+    delete[] buffer;
+    delete[] my_context->partitionCount;
+    my_context->partitionCount = nullptr;
+    delete[] my_context->partitionIndex;
+    my_context->partitionIndex = nullptr;
+    my_context->out_error = nullptr;
+  }
+
+  // Clean up
+  astcenc_context_free(my_context);
+}
+
+void astcenc_hack_encode(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, float quality, uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize)
+{
+#ifdef NDEBUG
+  static_cast<void>(partitionSelectionSize);
+  static_cast<void>(errorSize);
+  static_cast<void>(pixelDataSize);
+  static_cast<void>(out_decompressedPixelData);
+#endif
+  // Configure the compressor run
+  astcenc_config my_config;
+  astcenc_config_init(astcenc_profile::ASTCENC_PRF_LDR_SRGB, 4, 4, 0, quality, 0, &my_config);
+
+  uint32_t thread_count = 1;
+#if defined(_WIN32)
+  // Use Windows API to get the number of active logical processors
+  unsigned int cnt = static_cast<unsigned int>(GetActiveProcessorCount(ALL_PROCESSOR_GROUPS));
+  thread_count = (cnt == 0) ? 1u : cnt;
+#else
+  // Fallback to std::thread if not on Windows
+  unsigned int cnt = std::thread::hardware_concurrency();
+  thread_count = (cnt == 0) ? 1u : cnt;
+#endif
+  // Allocate working state given config and thread_count
+  astcenc_context* my_context{};
+  astcenc_context_alloc(&my_config, thread_count, &my_context);
+
+  // For each image
+  {
+    astcenc_image image;
+    image.data_type = ASTCENC_TYPE_U8;
+    image.dim_x = width;
+    image.dim_y = height;
+    image.dim_z = 1;
+    image.data = reinterpret_cast<void**>(const_cast<uint8_t**>(&pixelData)); // Needs to be 4 channel rgba
+
+    // Make sure alpha is unused
+    astcenc_swizzle swizzle;
+    swizzle.r = astcenc_swz::ASTCENC_SWZ_R;
+    swizzle.g = astcenc_swz::ASTCENC_SWZ_G;
+    swizzle.b = astcenc_swz::ASTCENC_SWZ_B;
+    swizzle.a = astcenc_swz::ASTCENC_SWZ_1;
+
+    // Separate our partition selection into partitionCount and partitionIndex
+    const size_t blocks = (width / 4) * (height / 4);
+    assert(blocks <= errorSize);
+    assert(blocks <= partitionSelectionSize);
+    assert(width * height * 4 <= pixelDataSize);
+
+    my_context->mode = HackMode::WriteBestPartition;
+    my_context->partitionCount = new uint8_t[blocks];
+		memset(my_context->partitionCount, 0, blocks * sizeof(uint8_t));
+    my_context->partitionIndex = new uint16_t[blocks];
+		memset(my_context->partitionIndex, 0, blocks * sizeof(uint16_t));
+    my_context->out_error = out_error;
+
+    const uint16_t part1Start = 0;
+    const uint16_t part2Start = part1Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[0];
+    const uint16_t part3Start = part2Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[1];
+    const uint16_t part4Start = part3Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[2];
+    const uint16_t totalPartitions = part4Start + (uint16_t)my_context->context.bsd->partitioning_count_selected[3];
+		static_cast<void>(totalPartitions);
+
+    // Temp output buffer
+    const size_t buffer_size = blocks * 16;
+    uint8_t* buffer = new uint8_t[buffer_size];
+
+    // For each thread in the thread pool
+    {
+      std::vector<std::thread> threads;
+      threads.reserve(thread_count);
+      for (uint32_t i = 0; i < thread_count; ++i)
+      {
+        threads.emplace_back(astcenc_compress_image, my_context, &image, &swizzle, buffer, buffer_size, i);
+      }
+      for (auto& t : threads)
+      {
+        if (t.joinable()) t.join();
+      }
+    }
+    astcenc_compress_reset(my_context);
+
+    for (size_t i = 0; i < blocks; i++)
+    {
+      uint16_t& partitionSelectionIndex = partitionSelection[i];
+      const uint8_t partitionCount = my_context->partitionCount[i];
+      const uint16_t partitionIndex = my_context->partitionIndex[i];
+
+			uint16_t packed_index = 0;
+			if (partitionCount >= 2)
 			{
+				 packed_index = my_context->context.bsd->partitioning_packed_index[partitionCount - 2][partitionIndex];
+			}
+			switch (partitionCount)
+			{
+			case 1:
+				partitionSelectionIndex = packed_index + part1Start;
+				break;
+			case 2:
+        partitionSelectionIndex = packed_index + part2Start;
+        break;
+			case 3:
+        partitionSelectionIndex = packed_index + part3Start;
+        break;
+			case 4:
+        partitionSelectionIndex = packed_index + part4Start;
+        break;
+			default:
 				assert(false);
+				break;
 			}
-			else if (partitionSelectionIndex >= part4Start)
-			{
-				partitionCount = 4;
-				partitionIndex = partitionSelectionIndex - part4Start;
-			}
-			else if (partitionSelectionIndex >= part3Start)
-			{
-				partitionCount = 3;
-				partitionIndex = partitionSelectionIndex - part3Start;
-			}
-			else if (partitionSelectionIndex >= part2Start)
-			{
-				partitionCount = 2;
-				partitionIndex = partitionSelectionIndex - part2Start;
-			}
-			else
-			{
-				partitionCount = 1;
-				partitionIndex = partitionSelectionIndex - part1Start;
-			}
-		}
 
-		// Temp output buffer
-		const size_t buffer_size = blocks * 16;
-		uint8_t* buffer = new uint8_t[buffer_size];
+			assert(partitionSelectionIndex < totalPartitions);
+    }
 
-		// For each thread in the thread pool
-		{
-			std::vector<std::thread> threads;
-			threads.reserve(thread_count);
-			for (uint32_t i = 0; i < thread_count; ++i)
-			{
-				threads.emplace_back(astcenc_compress_image, my_context, &image, &swizzle, buffer, buffer_size, i);
-			}
-			for (auto &t : threads)
-			{
-				if (t.joinable()) t.join();
-			}
-		}
-		astcenc_compress_reset(my_context);
+    delete[] buffer;
+    delete[] my_context->partitionCount;
+    my_context->partitionCount = nullptr;
+    delete[] my_context->partitionIndex;
+    my_context->partitionIndex = nullptr;
+    my_context->out_error = nullptr;
+  }
 
-		delete buffer;
-		delete my_context->partitionCount;
-		my_context->partitionCount = nullptr;
-		delete my_context->partitionIndex;
-		my_context->partitionIndex = nullptr;
-		my_context->out_error = nullptr;
-	}
-
-	// Clean up
-	astcenc_context_free(my_context);
+  // Clean up
+  astcenc_context_free(my_context);
 }

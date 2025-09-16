@@ -1164,7 +1164,7 @@ void compress_block(
 	const astcenc_contexti& ctx,
 	const image_block& blk,
 	uint8_t pcb[16],
-	compression_working_buffers& tmpbuf, uint8_t* partitionCount, uint16_t* partitionIndex, float* out_error)
+	compression_working_buffers& tmpbuf, uint8_t* partitionCount, uint16_t* partitionIndex, float* out_error, HackMode mode)
 {
 
 	astcenc_profile decode_mode = ctx.config.profile;
@@ -1293,7 +1293,7 @@ void compress_block(
 
 	int quant_limit = QUANT_32;
 
-	if (partitionCount != nullptr && partitionIndex != nullptr && out_error != nullptr)
+	if (mode == HackMode::UseGivenPartition && partitionCount != nullptr && partitionIndex != nullptr && out_error != nullptr)
 	{
 			uint16_t realPartitionIndex = bsd.get_partition_table(*partitionCount)[*partitionIndex].partition_index;
 			*out_error = compress_symbolic_block_for_partition_1plane(
@@ -1335,6 +1335,7 @@ void compress_block(
 		if (errorval < (error_threshold * errorval_mult[i]))
 		{
 			trace_add_data("exit", "quality hit");
+
 			goto END_OF_TESTS;
 		}
 	}
@@ -1343,7 +1344,8 @@ void compress_block(
 	lowest_correl = prepare_block_statistics(bsd.texel_count, blk);
 #endif
 
-	block_skip_two_plane = lowest_correl > ctx.config.tune_2plane_early_out_limit_correlation;
+	// HACK
+	block_skip_two_plane = true;// lowest_correl > ctx.config.tune_2plane_early_out_limit_correlation;
 
 	// Test the four possible 1-partition, 2-planes modes. Do this in reverse, as
 	// alpha is the most likely to be non-correlated if it is present in the data.
@@ -1473,6 +1475,13 @@ END_OF_TESTS:
 		store(color_u16, scb.constant_color);
 	}
 
+  if (mode == HackMode::WriteBestPartition && partitionCount != nullptr && partitionIndex != nullptr && out_error != nullptr)
+  {
+#pragma warning(  disable : 4701 )
+    *partitionCount = scb.partition_count;
+    *partitionIndex = scb.partition_index;
+    *out_error = scb.errorval;
+  }
 	// Compress to a physical block
 	symbolic_to_physical(bsd, scb, pcb);
 }

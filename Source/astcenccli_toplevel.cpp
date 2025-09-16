@@ -2178,12 +2178,18 @@ int astcenc_main(
 		uint16_t* partitionSelection = new uint16_t[blockCount];
 		for (size_t i = 0; i < blockCount; i++)
 		{
-			partitionSelection[i] = 0;
+			partitionSelection[i] = 44;
 		}
+
+		astcenc_hack_encode(image_uncomp_in->dim_x, image_uncomp_in->dim_y,
+			reinterpret_cast<uint8_t*>(image_uncomp_in->data[0]), image_uncomp_in->dim_x* image_uncomp_in->dim_y * 4, ASTCENC_PRE_THOROUGH,
+			partitionSelection, blockCount, error, blockCount);
 
 		astcenc_hack_test(image_uncomp_in->dim_x, image_uncomp_in->dim_y,
 			reinterpret_cast<uint8_t*>(image_uncomp_in->data[0]), image_uncomp_in->dim_x* image_uncomp_in->dim_y * 4,
 			partitionSelection, blockCount, error, blockCount);
+
+
 
 		// Only launch worker threads for multi-threaded use - it makes basic
 		// single-threaded profiling and debugging a little less convoluted

@@ -871,6 +871,52 @@ ASTCENC_PUBLIC astcenc_error astcenc_get_block_info(
 ASTCENC_PUBLIC const char* astcenc_get_error_string(
 	astcenc_error status);
 
+enum class HackMode
+{
+  UseGivenPartition, //encoder uses the partition passed in.
+  WriteBestPartition //encoder writes the partition it decided on back.
+};
+
+/// <summary>
+/// Computes the error for each block given a fixed partition selection
+/// </summary>
+/// <param name="width">width of image in pixels</param>
+/// <param name="height">height of the image in pixels</param>
+/// <param name="pixelData">rgba ubyte pixeldata</param>
+/// <param name="pixelDataSize">Length of pixelData array. Should be width * height * 4 (RGBA)</param>
+/// <param name="partitionSelection">Array of partition selections for each block. Must be between 0 and 1087.</param>
+/// <param name="partitionSelectionSize">Length of the partitionSelection array. Should be (width / 4) * (height / 4)</param>
+/// <param name="out_error">Array of errors computed by the function for each block</param>
+/// <param name="errorSize">Length of the out_error array. Should be (width / 4) * (height / 4)</param>
 ASTCENC_PUBLIC void astcenc_hack_test(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, const uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize);
+
+/// <summary>
+/// Computes the error for each block given a fixed partition selection and writes the decompressed image back
+/// </summary>
+/// <param name="width">width of image in pixels</param>
+/// <param name="height">height of the image in pixels</param>
+/// <param name="pixelData">rgba ubyte pixeldata</param>
+/// <param name="pixelDataSize">Length of pixelData array. Should be width * height * 4 (RGBA)</param>
+/// <param name="partitionSelection">Array of partition selections for each block. Must be between 0 and 1087.</param>
+/// <param name="partitionSelectionSize">Length of the partitionSelection array. Should be (width / 4) * (height / 4)</param>
+/// <param name="out_error">Array of errors computed by the function for each block</param>
+/// <param name="errorSize">Length of the out_error array. Should be (width / 4) * (height / 4)</param>
+/// <param name="out_decompressedPixelData">Should be of size pixelDataSize. The decompressed output is written here.
+ASTCENC_PUBLIC void astcenc_hack_test_and_output(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, const uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize, uint8_t* out_decompressedPixelData);
+
+/// <summary>
+/// Computes the best partition and the resulting error for each block.
+/// </summary>
+/// <param name="width">width of image in pixels</param>
+/// <param name="height">height of the image in pixels</param>
+/// <param name="pixelData">rgba ubyte pixeldata</param>
+/// <param name="pixelDataSize">Length of pixelData array. Should be width * height * 4 (RGBA)</param>
+/// <param name="quality">Quality level between 0.0f and 100.0f, see ASTCENC_PRE_THOROUGH etc</param>
+/// <param name="partitionSelection">Array of partition selections for each block. Will be filled by the function. Resulting value will be between 0 and 1087.</param>
+/// <param name="partitionSelectionSize">Length of the partitionSelection array. Should be (width / 4) * (height / 4)</param>
+/// <param name="out_error">Array of errors computed by the function for each block</param>
+/// <param name="errorSize">Length of the out_error array. Should be (width / 4) * (height / 4)</param>
+/// <returns></returns>
+ASTCENC_PUBLIC void astcenc_hack_encode(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, float quality, uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize);
 
 #endif
