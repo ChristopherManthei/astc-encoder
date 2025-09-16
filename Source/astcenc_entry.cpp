@@ -1580,7 +1580,6 @@ void astcenc_hack_encode(uint32_t width, uint32_t height, const uint8_t* pixelDa
   static_cast<void>(partitionSelectionSize);
   static_cast<void>(errorSize);
   static_cast<void>(pixelDataSize);
-  static_cast<void>(out_decompressedPixelData);
 #endif
   // Configure the compressor run
   astcenc_config my_config;
