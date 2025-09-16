@@ -1430,8 +1430,14 @@ const char* astcenc_get_error_string(
 #include<thread>
 #include <windows.h>
 
+
 void astcenc_hack_test(uint32_t width, uint32_t height, const uint8_t* pixelData, uint64_t pixelDataSize, const uint16_t* partitionSelection, uint64_t partitionSelectionSize, float* out_error, uint64_t errorSize)
 {
+	#ifdef NDEBUG
+	static_cast<void>(partitionSelectionSize);
+	static_cast<void>(errorSize);
+	static_cast<void>(pixelDataSize);
+	#endif
 	// Configure the compressor run
 	astcenc_config my_config;
 	astcenc_config_init(astcenc_profile::ASTCENC_PRF_LDR_SRGB, 4, 4, 0, ASTCENC_PRE_THOROUGH, 0, &my_config);
@@ -1447,7 +1453,7 @@ void astcenc_hack_test(uint32_t width, uint32_t height, const uint8_t* pixelData
 	thread_count = (cnt == 0) ? 1u : cnt;
 #endif
 	// Allocate working state given config and thread_count
-	astcenc_context* my_context;
+	astcenc_context* my_context{};
 	astcenc_context_alloc(&my_config, thread_count, &my_context);
 
 	// For each image
