@@ -1507,7 +1507,7 @@ void astcenc_hack_test(uint32_t width, uint32_t height, const uint8_t* pixelData
 				partitionCount = 3;
 				partitionIndex = partitionSelectionIndex - part3Start;
 			}
-			else if (partitionSelectionIndex >= part3Start)
+			else if (partitionSelectionIndex >= part2Start)
 			{
 				partitionCount = 2;
 				partitionIndex = partitionSelectionIndex - part2Start;
